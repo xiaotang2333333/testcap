@@ -97,6 +97,19 @@ jobs:
           fi
           df -h /
 
+      # opencv4 pulls a large default-feature tree. On Linux that includes gtk3,
+      # whose dependency chain (gperf, xorg-macros, ...) is built with autotools.
+      # Ubuntu runners do not ship that toolchain by default.
+      - name: Install Linux build prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf autoconf-archive automake libtool libtool-bin \
+            pkg-config gettext bison flex
+
       - name: Export Android NDK location
         if: matrix.android
         shell: bash
