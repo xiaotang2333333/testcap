@@ -110,6 +110,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             autoconf autoconf-archive automake libtool libtool-bin \
             pkg-config gettext bison flex \
+            libltdl-dev libdbus-1-dev \
             libx11-dev libxext-dev libxrender-dev libxcb1-dev libxau-dev libxdmcp-dev
 
       - name: Export Android NDK location
@@ -202,14 +203,16 @@ jobs:
           ls -la "$root"
           test -d "$root/include/opencv4/opencv2" \
             || { echo "::error::opencv2 headers missing in $root"; exit 1; }
-          # Static triplets have no bin/, and `find` exits non-zero on a missing
-          # path, which `set -e` + `pipefail` would turn into a spurious failure.
-          dirs=""
-          for d in lib bin; do
-            [ -d "$root/$d" ] && dirs="$dirs $root/$d"
-          done
-          count=$(find $dirs -iname '*opencv_core*' 2>/dev/null | wc -l || true)
-          echo "opencv_core artifacts: $count (searched:${dirs:- none})"
+          # Search the whole install root, not just lib/ and bin/: Android installs
+          # its static libraries under sdk/native/staticlibs/<abi>/, and static
+          # triplets have no bin/ at all. Only real library extensions count, so
+          # CMake metadata that merely mentions opencv_core is not a hit. `find`
+          # exits non-zero on an unreadable path, hence `|| true`.
+          count=$(find "$root" -type f \( \
+                    -iname '*opencv_core*.a' -o -iname '*opencv_core*.lib' \
+                    -o -iname '*opencv_core*.so*' -o -iname '*opencv_core*.dll' \
+                    -o -iname '*opencv_core*.dylib' \) 2>/dev/null | wc -l || true)
+          echo "opencv_core artifacts: $count"
           test "$count" -gt 0 || { echo "::error::opencv_core library missing under $root"; exit 1; }
 
       # No -G Ninja on purpose. On windows-latest the Ninja generator picks the
