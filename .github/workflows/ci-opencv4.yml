@@ -1,0 +1,217 @@
+name: opencv4 4.14.0 overlay-port CI
+
+# Validates that the overlay port in ./overlay-ports/opencv4 builds and installs
+# for the requested official vcpkg triplets.
+#
+#   scope = core : x64-windows, x64-windows-static, x64-windows-static-md,
+#                  x64-windows-release, x86-windows, x64-linux
+#   scope = all  : core + arm64-windows, arm64-windows-static-md, arm64-osx,
+#                  arm64-linux (cross), x64-android, arm64-android, arm-neon-android
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Triplet set to build"
+        type: choice
+        options: [core, all]
+        default: core
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.scope || 'core' }}
+  cancel-in-progress: true
+
+env:
+  # Same commit as the local vcpkg checkout this port update was developed against,
+  # so the official triplet definitions and dependency versions match exactly.
+  VCPKG_BASELINE: ee6a47dac031930715bea2e6dfb9ad60caaa5d83
+  VCPKG_DISABLE_METRICS: "1"
+
+jobs:
+  plan:
+    name: plan matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+      scope: ${{ steps.gen.outputs.scope }}
+    steps:
+      - id: gen
+        shell: bash
+        run: |
+          set -euo pipefail
+          core='[
+            {"triplet":"x64-windows",            "os":"windows-latest", "android":false, "chainload":""},
+            {"triplet":"x64-windows-static",     "os":"windows-latest", "android":false, "chainload":""},
+            {"triplet":"x64-windows-static-md",  "os":"windows-latest", "android":false, "chainload":""},
+            {"triplet":"x64-windows-release",    "os":"windows-latest", "android":false, "chainload":""},
+            {"triplet":"x86-windows",            "os":"windows-latest", "android":false, "chainload":""},
+            {"triplet":"x64-linux",              "os":"ubuntu-latest",  "android":false, "chainload":""}
+          ]'
+          extra='[
+            {"triplet":"arm64-windows",           "os":"windows-latest", "android":false, "chainload":""},
+            {"triplet":"arm64-windows-static-md", "os":"windows-latest", "android":false, "chainload":""},
+            {"triplet":"arm64-osx",               "os":"macos-latest",   "android":false, "chainload":""},
+            {"triplet":"arm64-linux",             "os":"ubuntu-latest",  "android":false, "chainload":"arm64-linux-toolchain.cmake"},
+            {"triplet":"x64-android",             "os":"ubuntu-latest",  "android":true,  "chainload":""},
+            {"triplet":"arm64-android",           "os":"ubuntu-latest",  "android":true,  "chainload":""},
+            {"triplet":"arm-neon-android",        "os":"ubuntu-latest",  "android":true,  "chainload":""}
+          ]'
+
+          scope='${{ inputs.scope || 'core' }}'
+          if [ "$scope" = "all" ]; then
+            matrix=$(printf '%s\n%s\n' "$core" "$extra" | jq -sc '.[0] + .[1]')
+          else
+            scope=core
+            matrix="$core"
+          fi
+          matrix=$(printf '%s' "$matrix" | jq -c .)
+
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "matrix={\"include\":$matrix}" >> "$GITHUB_OUTPUT"
+          echo "Planned triplets for scope '$scope':"
+          printf '%s' "$matrix" | jq -r '.[] | "  \(.triplet)  ->  \(.os)"'
+
+  build:
+    name: install ${{ matrix.triplet }}
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          if [ "${{ matrix.android }}" != "true" ]; then
+            sudo rm -rf /usr/local/lib/android || true
+          fi
+          df -h /
+
+      - name: Export Android NDK location
+        if: matrix.android
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-}}"
+          if [ -z "$ndk" ] || [ ! -d "$ndk" ]; then
+            ndk=$(ls -d "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"/ndk/* 2>/dev/null | tail -n1 || true)
+          fi
+          if [ -z "$ndk" ] || [ ! -d "$ndk" ]; then
+            echo "::error::No Android NDK found on this runner"
+            exit 1
+          fi
+          echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"
+          echo "Using Android NDK: $ndk"
+
+      - name: Prepare arm64 cross toolchain
+        if: matrix.chainload != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y g++-aarch64-linux-gnu
+          cat > "$RUNNER_TEMP/${{ matrix.chainload }}" <<'EOF'
+          set(CMAKE_SYSTEM_NAME Linux)
+          set(CMAKE_SYSTEM_PROCESSOR aarch64)
+          set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+          set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+          set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu)
+          set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+          set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+          set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+          EOF
+          echo "VCPKG_CHAINLOAD_TOOLCHAIN_FILE=$RUNNER_TEMP/${{ matrix.chainload }}" >> "$GITHUB_ENV"
+          aarch64-linux-gnu-g++ --version | head -n1
+
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout %VCPKG_BASELINE%
+          vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Bootstrap vcpkg (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout "$VCPKG_BASELINE"
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Show overlay port under test
+        shell: bash
+        run: |
+          echo "baseline : $VCPKG_BASELINE"
+          echo "triplet  : ${{ matrix.triplet }}"
+          grep -E '"(name|version|port-version)"' overlay-ports/opencv4/vcpkg.json
+          echo "patches  : $(ls -1 overlay-ports/opencv4 | grep -cE '\.(patch|diff)$')"
+
+      - name: Resolve manifest (dry run, Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: vcpkg\vcpkg.exe install --triplet ${{ matrix.triplet }} --dry-run
+
+      - name: Resolve manifest (dry run, Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./vcpkg/vcpkg install --triplet ${{ matrix.triplet }} --dry-run
+
+      - name: Build and install opencv4 (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: vcpkg\vcpkg.exe install --triplet ${{ matrix.triplet }} --clean-after-build
+
+      - name: Build and install opencv4 (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./vcpkg/vcpkg install --triplet ${{ matrix.triplet }} --clean-after-build
+
+      - name: Verify installed artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="vcpkg_installed/${{ matrix.triplet }}"
+          ls -la "$root"
+          test -d "$root/include/opencv4/opencv2" \
+            || { echo "::error::opencv2 headers missing in $root"; exit 1; }
+          count=$(find "$root/lib" "$root/bin" -iname '*opencv_core*' 2>/dev/null | wc -l)
+          echo "opencv_core artifacts: $count"
+          test "$count" -gt 0 || { echo "::error::opencv_core library missing"; exit 1; }
+
+      - name: Consume the port with CMake (x64-windows only)
+        if: matrix.triplet == 'x64-windows'
+        shell: cmd
+        run: |
+          cmake -S . -B build -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_TOOLCHAIN_FILE=%GITHUB_WORKSPACE%\vcpkg\scripts\buildsystems\vcpkg.cmake ^
+            -DVCPKG_TARGET_TRIPLET=x64-windows ^
+            -DVCPKG_MANIFEST_MODE=OFF ^
+            -DVCPKG_INSTALLED_DIR=%GITHUB_WORKSPACE%\vcpkg_installed ^
+            -DTESTCAP_WITH_OPENCV=ON
+          cmake --build build --config Release
+          build\testcap.exe
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.triplet }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            vcpkg/buildtrees/opencv4/*.log
+            vcpkg/buildtrees/opencv4/install-*.log
+            vcpkg/buildtrees/**/config-*.log

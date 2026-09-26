@@ -1,0 +1,17 @@
+# Build output
+out/
+build/
+vcpkg_installed/
+installed/
+
+# vcpkg artifacts
+downloads/
+packages/
+buildtrees/
+
+# Editors / OS
+.vs/
+*.user
+*.swp
+Thumbs.db
+.DS_Store
