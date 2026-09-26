@@ -176,11 +176,20 @@ if("cuda" IN_LIST FEATURES)
   )
 endif()
 
-if(VCPKG_TARGET_IS_ANDROID AND (VCPKG_TARGET_ARCHITECTURE MATCHES "^arm"))
+# ARM KleidiCV HAL.
+# OpenCV >= 4.14.0 raises this from an Android-only extra to the general ARM HAL:
+#   OCV_OPTION(WITH_KLEIDICV ... (NOT CV_DISABLE_OPTIMIZATION)
+#     VISIBLE_IF (AARCH64 AND (ANDROID OR UNIX)))
+# so on every AArch64 target it defaults to ON and hal/kleidicv/kleidicv.cmake
+# fetches kleidicv-${KLEIDICV_SRC_COMMIT} at configure time, which the port
+# forbids (0001-disable-downloading.patch). The pinned commit is 26.03 and the
+# cache key must match the HASH that OpenCV passes to ocv_download, otherwise
+# the download is not recognised and configure still fails.
+if(VCPKG_TARGET_ARCHITECTURE MATCHES "^arm")
   vcpkg_download_distfile(OCV_DOWNLOAD
-    URLS "https://gitlab.arm.com/kleidi/kleidicv/-/archive/0.5.0/kleidicv-0.5.0.tar.gz"
-    FILENAME "opencv-cache/kleidicv/ba5648f8df678548f337d19d8ac607d6-kleidicv-0.5.0.tar.gz"
-    SHA512 81b3bd441dae10407ce2646b7bc2f099cdfb72600429040d78d1b53fae44d527b37c5191a29a0e29985717d52a27e8d1e6d2fbc559e616aa612ace30ec82fe6e
+    URLS "https://gitlab.arm.com/kleidi/kleidicv/-/archive/26.03/kleidicv-26.03.tar.gz"
+    FILENAME "opencv-cache/kleidicv/b85a745bfe0e87e67e30be9533eb6b24-kleidicv-26.03.tar.gz"
+    SHA512 f5963dd7a4eae810afc580581a2c5319a03e2ec4735cef0c928b767f77806f0d98c7617c0b2b18dc9e371b2328dd89f3754b02c9fd7e430da439dc5cca491b6d
   )
 endif()
 
