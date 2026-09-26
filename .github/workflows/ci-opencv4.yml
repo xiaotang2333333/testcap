@@ -198,26 +198,37 @@ jobs:
         run: |
           set -euo pipefail
           root="vcpkg_installed/${{ matrix.triplet }}"
+          test -d "$root" || { echo "::error::install root missing: $root"; exit 1; }
           ls -la "$root"
           test -d "$root/include/opencv4/opencv2" \
             || { echo "::error::opencv2 headers missing in $root"; exit 1; }
-          count=$(find "$root/lib" "$root/bin" -iname '*opencv_core*' 2>/dev/null | wc -l)
-          echo "opencv_core artifacts: $count"
-          test "$count" -gt 0 || { echo "::error::opencv_core library missing"; exit 1; }
+          # Static triplets have no bin/, and `find` exits non-zero on a missing
+          # path, which `set -e` + `pipefail` would turn into a spurious failure.
+          dirs=""
+          for d in lib bin; do
+            [ -d "$root/$d" ] && dirs="$dirs $root/$d"
+          done
+          count=$(find $dirs -iname '*opencv_core*' 2>/dev/null | wc -l || true)
+          echo "opencv_core artifacts: $count (searched:${dirs:- none})"
+          test "$count" -gt 0 || { echo "::error::opencv_core library missing under $root"; exit 1; }
 
+      # No -G Ninja on purpose. On windows-latest the Ninja generator picks the
+      # MinGW gcc that sits on PATH, while triplet x64-windows is built with MSVC.
+      # Mixing those ABIs fails at link time with undefined references to cv::Mat,
+      # cv::Mat::eye and cv::sum. The default Visual Studio generator keeps the
+      # consumer on MSVC, matching the triplet.
       - name: Consume the port with CMake (x64-windows only)
         if: matrix.triplet == 'x64-windows'
         shell: cmd
         run: |
-          cmake -S . -B build -G Ninja ^
-            -DCMAKE_BUILD_TYPE=Release ^
+          cmake -S . -B build -A x64 ^
             -DCMAKE_TOOLCHAIN_FILE=%GITHUB_WORKSPACE%\vcpkg\scripts\buildsystems\vcpkg.cmake ^
             -DVCPKG_TARGET_TRIPLET=x64-windows ^
             -DVCPKG_MANIFEST_MODE=OFF ^
             -DVCPKG_INSTALLED_DIR=%GITHUB_WORKSPACE%\vcpkg_installed ^
             -DTESTCAP_WITH_OPENCV=ON
           cmake --build build --config Release
-          build\testcap.exe
+          build\Release\testcap.exe
 
       - name: Upload failure logs
         if: failure()
