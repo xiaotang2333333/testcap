@@ -1,18 +1,73 @@
-# opencv4 vcpkg overlay port — 4.12.0#9 → 4.14.0
+# vcpkg overlay ports — opencv5 5.0.0 and opencv4 4.14.0
 
-This repository carries an **overlay port** that upgrades vcpkg's `opencv4` port from
-`4.12.0#9` to `4.14.0`, plus a GitHub Actions workflow that validates the port by
-building and installing it for the official vcpkg triplets.
+This repository carries **overlay ports** for vcpkg plus GitHub Actions workflows that
+validate them by building and installing them for the official vcpkg triplets:
+
+* `overlay-ports/opencv5` — OpenCV **5.0.0** (new; see below)
+* `overlay-ports/opencv4` — upgrades vcpkg's `opencv4` port from `4.12.0#9` to `4.14.0`
+* `overlay-ports/opencv` — alias port forwarding to `opencv4`
 
 No branch or commit is made inside the vcpkg checkout; everything lives here and is
 consumed through `overlay-ports`.
 
-## Layout
+## OpenCV 5.0.0 (`overlay-ports/opencv5`, CI: `ci-opencv5.yml`)
+
+The port is derived from the opencv4 port and revalidated against the pristine
+`5.0.0` sources (main repo + `opencv_contrib`). Its manifest is
+`ci/opencv5/vcpkg.json` so both ports can be CI'd from one repository.
+
+### OpenCV 5 build-system findings (why the patch set changed)
+
+* **Module restructuring**: `calib3d` was split into `geometry`/`calib`/`stereo`
+  (+ new `ptcloud`), `features2d` → `features`, and **`ml` + `gapi` moved to
+  `opencv_contrib`**. The `calib3d` feature now toggles
+  `BUILD_opencv_calib`/`geometry`/`stereo`; `gapi` (and `ade`, `freetype`) now
+  depend on the `contrib` feature, and `gapi` is no longer a default feature.
+* **`quirc` is gone** from the sources entirely (QR decoding is built into
+  `objdetect`), so the port dropped the `quirc` feature, its dep and its patch.
+* **TFLite**: 5.0 ships a pre-generated `misc/tflite/schema_generated.h`, so the
+  port no longer runs `flatc` at build time; `0017-fix-flatbuffers.patch` still
+  redirects flatbuffers detection to the vcpkg `flatbuffers` config package.
+* **OpenEXR**: `FindOpenEXR` now exists in-tree with a `find_package(OpenEXR 3 …)`
+  call; `0012-miss-openexr.patch` became redundant (its include already happens
+  under `WITH_OPENEXR`) and the REQUIRED forcing folded into
+  `0003-force-package-requirements.patch`.
+* **New configure-time download**: `imgproc` embeds the WenQuanYi Micro Hei font
+  (`WITH_UNIFONT` defaults ON), so the port pre-seeds that cache entry; the
+  tiny-dnn pre-seed was dropped (no longer referenced).
+* **ippicv 2026.0.0**: x64 Windows/Linux now fetch `ippicv_2026.0.0_*` from commit
+  `406d398c…`; the pre-seeds were updated (the `ipp` feature is not default, but
+  the seeds are correct for `--cmake-args=-DVCPKG_OPENCV4_UPDATE=1` style refreshes).
+
+Patch disposition on 5.0.0 (13 main + 6 contrib, all verified to apply cleanly in
+portfile order on pristine trees):
+
+| Status | Patches |
+| --- | --- |
+| Kept byte-for-byte | `0001` `0004` `0009` `0010` `0017` `0021` `0022` `0025` `0026` `0028` + contrib `0007` `0013` `0016` `0018` `0019` |
+| Refreshed | `0002-install-options` (dropped the `data/CMakeLists.txt` hunk — the directory is gone), `0003-force-package-requirements` (rebased onto 5.0 `OpenCVFindLibsGrfmt`, JPEG/OpenEXR hunks rewritten), `0005-vulkan.diff` (dnn hunk rebased) |
+| Retargeted | `0015-fix-freetype` now patches **contrib** `modules/gapi/cmake/init.cmake` (gapi moved out of the main repo) |
+| Dropped | `0008-devendor-quirc` (no quirc in 5.0), `0012-miss-openexr` (upstream now includes the find under `WITH_OPENEXR`) |
+
+### CI
+
+`.github/workflows/ci-opencv5.yml` mirrors `ci-opencv4.yml` (same 13 official
+triplets, `scope=core|all`, system-package prep, arm64 cross fix, failure
+annotations) but runs `vcpkg install` from `ci/opencv5/`. The manifest pins
+`builtin-baseline` to the local vcpkg `master` commit the port was developed
+against.
+
+## opencv4 4.12.0#9 → 4.14.0
+
+### Layout
 
 ```
 .
+├── overlay-ports/opencv5/       # OpenCV 5.0.0 port (portfile + patches + manifest)
 ├── overlay-ports/opencv4/       # the upgraded port (portfile + patches + manifest)
-├── vcpkg.json                   # manifest: depends on opencv4, baselines + overlay config
+├── ci/opencv5/vcpkg.json        # manifest for the opencv5 CI (depends on opencv5)
+├── vcpkg.json                   # manifest: depends on opencv4, baseline + overlay config
+├── .github/workflows/ci-opencv5.yml
 ├── .github/workflows/ci-opencv4.yml
 ├── CMakeLists.txt / main.cpp    # tiny consumer used as a link-time sanity check
 └── CMakePresets.json

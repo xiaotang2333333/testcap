@@ -1,0 +1,13 @@
+diff --git a/modules/gapi/cmake/init.cmake b/modules/gapi/cmake/init.cmake
+index dd4b0bc..9d0556c 100644
+--- a/modules/gapi/cmake/init.cmake
++++ b/modules/gapi/cmake/init.cmake
+@@ -21,7 +21,7 @@ if(NOT TARGET ade)
+ endif()
+ 
+ if(WITH_FREETYPE)
+-  ocv_check_modules(FREETYPE freetype2)
++  find_package(Freetype REQUIRED)
+   if (FREETYPE_FOUND)
+       set(HAVE_FREETYPE TRUE)
+   endif()
