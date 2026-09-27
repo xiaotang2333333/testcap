@@ -38,7 +38,7 @@ env:
 jobs:
   plan:
     name: plan matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
       scope: ${{ steps.gen.outputs.scope }}
@@ -47,22 +47,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Linux runners are pinned to ubuntu-24.04 (noble): the same base as the
+          # official vcpkg CI image scripts/azure-pipelines/linux-arm64/Dockerfile
+          # (FROM ubuntu:noble). "crosslinux" jobs provision the cross toolchain the
+          # same way that image does and rely on vcpkg's own scripts/toolchains/linux.cmake
+          # to auto-detect aarch64-linux-gnu-gcc (no hand-written chainload file).
           core='[
-            {"triplet":"x64-windows",            "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-windows-static",     "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-windows-static-md",  "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-windows-release",    "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x86-windows",            "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-linux",              "os":"ubuntu-latest",  "android":false, "chainload":""}
+            {"triplet":"x64-windows",            "os":"windows-latest", "android":false, "crosslinux":false},
+            {"triplet":"x64-windows-static",     "os":"windows-latest", "android":false, "crosslinux":false},
+            {"triplet":"x64-windows-static-md",  "os":"windows-latest", "android":false, "crosslinux":false},
+            {"triplet":"x64-windows-release",    "os":"windows-latest", "android":false, "crosslinux":false},
+            {"triplet":"x86-windows",            "os":"windows-latest", "android":false, "crosslinux":false},
+            {"triplet":"x64-linux",              "os":"ubuntu-24.04",   "android":false, "crosslinux":false}
           ]'
           extra='[
-            {"triplet":"arm64-windows",           "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"arm64-windows-static-md", "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"arm64-osx",               "os":"macos-latest",   "android":false, "chainload":""},
-            {"triplet":"arm64-linux",             "os":"ubuntu-latest",  "android":false, "chainload":"arm64-linux-toolchain.cmake"},
-            {"triplet":"x64-android",             "os":"ubuntu-latest", "android":true,  "chainload":""},
-            {"triplet":"arm64-android",           "os":"ubuntu-latest", "android":true,  "chainload":""},
-            {"triplet":"arm-neon-android",        "os":"ubuntu-latest", "android":true,  "chainload":""}
+            {"triplet":"arm64-windows",           "os":"windows-latest", "android":false, "crosslinux":false},
+            {"triplet":"arm64-windows-static-md", "os":"windows-latest", "android":false, "crosslinux":false},
+            {"triplet":"arm64-osx",               "os":"macos-latest",   "android":false, "crosslinux":false},
+            {"triplet":"arm64-linux",             "os":"ubuntu-24.04",   "android":false, "crosslinux":true},
+            {"triplet":"x64-android",             "os":"ubuntu-24.04",   "android":true,  "crosslinux":false},
+            {"triplet":"arm64-android",           "os":"ubuntu-24.04",   "android":true,  "crosslinux":false},
+            {"triplet":"arm-neon-android",        "os":"ubuntu-24.04",   "android":true,  "crosslinux":false}
           ]'
 
           scope='${{ inputs.scope || 'core' }}'
@@ -99,33 +104,47 @@ jobs:
           fi
           df -h /
 
-      # opencv5 pulls a large default-feature tree. On Linux that includes gtk3.
-      # Two classes of system dependency show up, both declared by the vcpkg ports
-      # themselves, and neither is present on a bare Ubuntu runner:
-      #   * autotools-family build tools (gperf, xorg-macros, libxcrypt via libltdl)
-      #   * X11/GL libraries that some ports deliberately take from the system:
-      #       at-spi2-core -> libxi-dev libxtst-dev
-      #       libepoxy     -> libx11-dev libgles2-mesa-dev
-      #       glib         -> libselinux1-dev
-      #       gtk3         -> xrandr (meson.build:557), plus the usual X11 backend set
-      # Most other X11 libraries are still built by vcpkg, so do not add blanket
-      # -dev packages. arm64-linux additionally installs the arm64 variants of the
-      # X11 libraries (see "Prepare arm64 cross toolchain") so that cairo's XRender
-      # link test can succeed for the target architecture.
-      - name: Install Linux build prerequisites
+      # Package set mirrors the official vcpkg CI image
+      # (scripts/azure-pipelines/linux-arm64/Dockerfile, FROM ubuntu:noble): the
+      # autotools/nasm/yasm/gperf/python toolchain plus the full X11/GL/xorg stack
+      # that image ships. opencv5's default features additionally pull gtk3, whose
+      # vcpkg ports declare a few extra system needs not in that image:
+      #   at-spi2-core -> libxi-dev libxtst-dev (in image)
+      #   libepoxy     -> libx11-dev libgles2-mesa-dev (gles2 is extra)
+      #   glib         -> libselinux1-dev (extra)
+      #   gtk3         -> xrandr, plus libltdl-dev/libdbus-1-dev (extra)
+      - name: Install Linux build prerequisites (vcpkg CI image parity)
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            autoconf autoconf-archive automake libtool libtool-bin \
+            build-essential cmake ninja-build \
+            autoconf autoconf-archive automake autopoint \
+            libtool libtool-bin libltdl-dev m4 \
             pkg-config gettext bison flex \
-            libltdl-dev libdbus-1-dev \
-            libxi-dev libxtst-dev libgles2-mesa-dev libselinux1-dev \
-            libx11-dev libxext-dev libxrender-dev libxcb1-dev libxau-dev libxdmcp-dev \
-            libxrandr-dev libxcursor-dev libxdamage-dev libxfixes-dev \
-            libxcomposite-dev libxinerama-dev
+            nasm yasm gperf zip unzip tar git python3 python3-pip python3-setuptools python3-venv \
+            libnuma1 libnuma-dev libudev-dev libtirpc-dev \
+            libdbus-1-dev libselinux1-dev libgles2-mesa-dev
+
+      - name: Install X11/GL development packages (vcpkg CI image parity)
+        if: runner.os == 'Linux' && matrix.android == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends \
+            libx11-dev libxcursor-dev libxtst-dev libxi-dev libxrandr-dev \
+            libxxf86vm-dev libxext-dev libxfixes-dev libxrender-dev \
+            libxdamage-dev libxcomposite-dev libxau-dev libxdmcp-dev \
+            libxcb1-dev libx11-xcb-dev libxcb-glx0-dev libxcb-util0-dev \
+            libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
+            libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev \
+            libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev \
+            libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libxinerama-dev \
+            libglu1-mesa-dev libgl1-mesa-dev libgl-dev mesa-common-dev \
+            libxmu-dev xorg-dev
 
       - name: Export Android NDK location
         if: matrix.android
@@ -142,26 +161,36 @@ jobs:
           echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"
           echo "Using Android NDK: $ndk"
 
-      - name: Prepare arm64 cross toolchain
-        if: matrix.chainload != ''
+      # Mirrors scripts/azure-pipelines/linux-arm64/Dockerfile: install the gcc-13
+      # cross toolchain and register it with update-alternatives exactly like the
+      # image does, so plain `aarch64-linux-gnu-gcc/g++/gfortran` resolve to gcc-13.
+      # No hand-written chainload file: vcpkg's own scripts/toolchains/linux.cmake
+      # auto-detects ${GNU_TRIPLET}-gcc when the target is arm64 — this is what the
+      # official CI does and keeps the stock triplets' behavior identical.
+      #
+      # Documented deviation from the image: opencv5 is tested with its DEFAULT
+      # features, which on Linux include gtk3. Official CI never builds opencv on
+      # arm64-linux (scripts/ci.baseline.txt omits it), so the image only ships the
+      # amd64 X11 dev packages. gtk3's cairo runs a meson link test for
+      # XRenderCreateConicalGradient that must link an *arm64* libXrender, and
+      # vcpkg's X11 ports are EMPTY packages on non-Windows (ports/libxrender
+      # declares VCPKG_POLICY_EMPTY_PACKAGE), so the arm64 variants are added here.
+      # The official triplets themselves stay untouched; this only supplies
+      # target-arch system libraries.
+      - name: Prepare arm64 cross toolchain (vcpkg CI image parity)
+        if: matrix.crosslinux == true
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y g++-aarch64-linux-gnu
+          sudo apt-get install -y --no-install-recommends \
+            gcc-13-aarch64-linux-gnu g++-13-aarch64-linux-gnu gfortran-13-aarch64-linux-gnu
+          sudo update-alternatives --install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-13 100
+          sudo update-alternatives --install /usr/bin/aarch64-linux-gnu-g++ aarch64-linux-gnu-g++ /usr/bin/aarch64-linux-gnu-g++-13 100
+          sudo update-alternatives --install /usr/bin/aarch64-linux-gnu-gfortran aarch64-linux-gnu-gfortran /usr/bin/aarch64-linux-gnu-gfortran-13 100
+          aarch64-linux-gnu-gcc --version | head -n1
 
-          # cairo's meson link test for XRenderCreateConicalGradient has to link an
-          # arm64 libXrender. vcpkg's X11 ports are EMPTY packages on non-Windows
-          # (ports/libxrender/portfile.cmake sets VCPKG_POLICY_EMPTY_PACKAGE and tells
-          # you to use the system libraries), so only the host x86_64 libXrender is
-          # present, the link test fails for an arm64 target, and
-          # HAVE_XRENDERCREATECONICALGRADIENT stays unset. cairo then re-defines
-          # XLinearGradient/XCircle/XRadialGradient/XConicalGradient in
-          # cairo-xlib-xrender-private.h, which collides with the system Xrender.h:
-          #   cairo-xlib-xrender-private.h:109: error: conflicting types for 'XLinearGradient'
-          #   /usr/include/X11/extensions/Xrender.h:186: note: originally defined here
-          # Installing the arm64 variants lets the link test succeed. The official
-          # triplets are used unchanged; this only supplies target-arch system libs.
+          # arm64 variants of the X11 dev packages (see header comment).
           sudo dpkg --add-architecture arm64
           sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
           sudo tee /etc/apt/sources.list.d/arm64.sources >/dev/null <<'EOF'
@@ -182,19 +211,6 @@ jobs:
           # target-arch X11 libraries. PKG_CONFIG_PATH (set by vcpkg) still wins for
           # vcpkg-provided packages.
           echo "PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> "$GITHUB_ENV"
-
-          cat > "$RUNNER_TEMP/${{ matrix.chainload }}" <<'EOF'
-          set(CMAKE_SYSTEM_NAME Linux)
-          set(CMAKE_SYSTEM_PROCESSOR aarch64)
-          set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
-          set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
-          set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu /usr)
-          set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-          set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-          set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-          EOF
-          echo "VCPKG_CHAINLOAD_TOOLCHAIN_FILE=$RUNNER_TEMP/${{ matrix.chainload }}" >> "$GITHUB_ENV"
-          aarch64-linux-gnu-g++ --version | head -n1
 
       - name: Bootstrap vcpkg (Windows)
         if: runner.os == 'Windows'
