@@ -225,7 +225,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         working-directory: ci/opencv5
-        run: %GITHUB_WORKSPACE%\vcpkg\vcpkg.exe install --triplet ${{ matrix.triplet }} --dry-run
+        run: '%GITHUB_WORKSPACE%\vcpkg\vcpkg.exe install --triplet ${{ matrix.triplet }} --dry-run'
 
       - name: Resolve manifest (dry run, Unix)
         if: runner.os != 'Windows'
@@ -237,7 +237,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         working-directory: ci/opencv5
-        run: %GITHUB_WORKSPACE%\vcpkg\vcpkg.exe install --triplet ${{ matrix.triplet }} --clean-after-build
+        run: '%GITHUB_WORKSPACE%\vcpkg\vcpkg.exe install --triplet ${{ matrix.triplet }} --clean-after-build'
 
       - name: Build and install opencv5 (Unix)
         if: runner.os != 'Windows'
