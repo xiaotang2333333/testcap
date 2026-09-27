@@ -97,10 +97,15 @@ jobs:
           fi
           df -h /
 
-      # opencv4 pulls a large default-feature tree. On Linux that includes gtk3,
-      # whose dependency chain (gperf, xorg-macros, cairo, ...) builds with
-      # autotools and looks up X11 through pkg-config. Ubuntu runners ship
-      # neither the autotools toolchain nor the X11 development files.
+      # opencv4 pulls a large default-feature tree. On Linux that includes gtk3.
+      # Two classes of system dependency show up, both declared by the vcpkg ports
+      # themselves, and neither is present on a bare Ubuntu runner:
+      #   * autotools-family build tools (gperf, xorg-macros, libxcrypt via libltdl)
+      #   * X11/GL libraries that some ports deliberately take from the system:
+      #       at-spi2-core -> libxi-dev libxtst-dev
+      #       libepoxy     -> libx11-dev libgles2-mesa-dev
+      #       glib         -> libselinux1-dev
+      # Most X11 libraries are still built by vcpkg, so do not add blanket -dev packages.
       - name: Install Linux build prerequisites
         if: runner.os == 'Linux'
         shell: bash
@@ -111,6 +116,7 @@ jobs:
             autoconf autoconf-archive automake libtool libtool-bin \
             pkg-config gettext bison flex \
             libltdl-dev libdbus-1-dev \
+            libxi-dev libxtst-dev libgles2-mesa-dev libselinux1-dev \
             libx11-dev libxext-dev libxrender-dev libxcb1-dev libxau-dev libxdmcp-dev
 
       - name: Export Android NDK location
@@ -232,6 +238,30 @@ jobs:
             -DTESTCAP_WITH_OPENCV=ON
           cmake --build build --config Release
           build\Release\testcap.exe
+
+      # GitHub archives job logs only after the job ends, and fetching a raw log
+      # requires authentication. Emit the real cause as an annotation so it stays
+      # readable without a token:
+      #   GET /repos/{owner}/{repo}/check-runs/{id}/annotations
+      - name: Surface failure cause as annotation
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          msg=$(
+            grep -rhoiE "error: building [^ ]+ failed with: [A-Z_]+" vcpkg/buildtrees 2>/dev/null | sort -u | head -2
+            grep -rhA10 "CMake Error at .*vcpkg_make.cmake" vcpkg/buildtrees 2>/dev/null | grep -iE "requires|depends on|apt install|dnf install" | sort -u | head -4
+            grep -rhoiE 'ERROR: Dependency "[^"]+" not found' vcpkg/buildtrees 2>/dev/null | sort -u | head -6
+            grep -rhoE "CMake Error at [^:]+:[0-9]+" vcpkg/buildtrees 2>/dev/null | sort -u | head -4
+            grep -rhoiE "error C[0-9]{4}: [^\"']{0,90}" vcpkg/buildtrees 2>/dev/null | sort -u | head -4
+            grep -rhoiE "undefined reference to [^\"']{0,90}" vcpkg/buildtrees/opencv4 2>/dev/null | sort -u | head -4
+          )
+          echo "--- failure summary for ${{ matrix.triplet }} ---"
+          echo "$msg"
+          msg=${msg//'%'/'%25'}
+          msg=${msg//$'\r'/}
+          msg=${msg//$'\n'/'%0A'}
+          echo "::error::${msg:0:900}"
 
       - name: Upload failure logs
         if: failure()
