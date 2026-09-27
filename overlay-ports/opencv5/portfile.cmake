@@ -20,6 +20,7 @@ vcpkg_from_github(
       0025-fix-cuda-host-std-flag-forwarding.patch
       0026-cuda-msvc-preprocessor.patch
       0028-ffmpeg9-support.patch
+      0029-dnn-fix-caffe-pregenerated-headers.patch
 )
 
 # Disallow accidental build of vendored copies, but keep the vendored trees that

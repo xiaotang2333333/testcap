@@ -1,0 +1,19 @@
+diff --git a/modules/dnn/CMakeLists.txt b/modules/dnn/CMakeLists.txt
+index 80564c8..3f1609d 100644
+--- a/modules/dnn/CMakeLists.txt
++++ b/modules/dnn/CMakeLists.txt
+@@ -414,6 +414,14 @@ if(HAVE_PROTOBUF)
+       list(FILTER fw_srcs EXCLUDE REGEX ".+\.h$")
+       list(FILTER fw_hdrs INCLUDE REGEX ".+\.h$")
+     endif()
++    # OpenCV 5 dropped caffe.proto from the sources (the Caffe importer is gone),
++    # but modules/dnn/src/caffe/caffe_io.cpp still compiles and includes the
++    # pre-generated misc/caffe/opencv-caffe.pb.h. This branch previously never
++    # added misc/caffe to the include path (nor the .pb.cc to the sources), so
++    # builds with PROTOBUF_UPDATE_FILES=ON failed with a missing header.
++    set(fw_inc "${CMAKE_CURRENT_LIST_DIR}/misc/caffe")
++    list(APPEND fw_srcs "${CMAKE_CURRENT_LIST_DIR}/misc/caffe/opencv-caffe.pb.cc")
++    list(APPEND fw_hdrs "${CMAKE_CURRENT_LIST_DIR}/misc/caffe/opencv-caffe.pb.h")
+   else()
+     file(GLOB fw_srcs "${CMAKE_CURRENT_LIST_DIR}/misc/tensorflow/*.cc" "${CMAKE_CURRENT_LIST_DIR}/misc/caffe/opencv-caffe.pb.cc" "${CMAKE_CURRENT_LIST_DIR}/misc/onnx/opencv-onnx.pb.cc")
+     file(GLOB fw_hdrs "${CMAKE_CURRENT_LIST_DIR}/misc/tensorflow/*.h" "${CMAKE_CURRENT_LIST_DIR}/misc/caffe/opencv-caffe.pb.h" "${CMAKE_CURRENT_LIST_DIR}/misc/onnx/opencv-onnx.pb.h")
