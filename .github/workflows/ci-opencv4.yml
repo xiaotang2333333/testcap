@@ -32,6 +32,10 @@ env:
   # so the official triplet definitions and dependency versions match exactly.
   VCPKG_BASELINE: ee6a47dac031930715bea2e6dfb9ad60caaa5d83
   VCPKG_DISABLE_METRICS: "1"
+  # ./triplets holds an overlay copy of arm64-linux.cmake that only adds
+  # X_VCPKG_FORCE_VCPKG_X_LIBRARIES=ON. Triplets not present there fall back to the
+  # official definitions, so the official triplets stay authoritative.
+  VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/triplets
 
 jobs:
   plan:
@@ -105,7 +109,11 @@ jobs:
       #       at-spi2-core -> libxi-dev libxtst-dev
       #       libepoxy     -> libx11-dev libgles2-mesa-dev
       #       glib         -> libselinux1-dev
-      # Most X11 libraries are still built by vcpkg, so do not add blanket -dev packages.
+      #       gtk3         -> xrandr (meson.build:557), plus the usual X11 backend set
+      # Most other X11 libraries are still built by vcpkg, so do not add blanket
+      # -dev packages. arm64-linux additionally uses the overlay triplet in
+      # ./triplets, which turns on X_VCPKG_FORCE_VCPKG_X_LIBRARIES so that cairo's
+      # XRender link test can succeed for the arm64 target (see that file).
       - name: Install Linux build prerequisites
         if: runner.os == 'Linux'
         shell: bash
@@ -117,7 +125,9 @@ jobs:
             pkg-config gettext bison flex \
             libltdl-dev libdbus-1-dev \
             libxi-dev libxtst-dev libgles2-mesa-dev libselinux1-dev \
-            libx11-dev libxext-dev libxrender-dev libxcb1-dev libxau-dev libxdmcp-dev
+            libx11-dev libxext-dev libxrender-dev libxcb1-dev libxau-dev libxdmcp-dev \
+            libxrandr-dev libxcursor-dev libxdamage-dev libxfixes-dev \
+            libxcomposite-dev libxinerama-dev
 
       - name: Export Android NDK location
         if: matrix.android
