@@ -69,6 +69,64 @@ Removing them also removes four network downloads from the port.
 All 16 main-tree patches and all 5 contrib patches were re-verified to apply cleanly,
 in portfile order, on a pristine `4.14.0` tree.
 
+## The `opencv` alias port
+
+`opencv` is a pure alias: its portfile is an empty package that forwards every feature to
+`opencv4`, and its `vcpkg.json` only depends on `opencv4`. It needs no build changes, but
+upstream keeps its version metadata in step with `opencv4`, so `overlay-ports/opencv/`
+mirrors that. Only `vcpkg.json` differs from upstream (`4.12.0` -> `4.14.0` plus the
+documentation link); `portfile.cmake` and `vcpkg-cmake-wrapper.cmake.in` are byte
+identical.
+
+## Verification status
+
+All **13 official triplets** in `triplets/` pass, with zero failures:
+
+| triplet | time | triplet | time |
+| --- | --- | --- | --- |
+| `x64-windows` | 52:41 | `arm64-windows` | 60:11 |
+| `x64-windows-static` | 51:52 | `arm64-windows-static-md` | 49:05 |
+| `x64-windows-static-md` | 50:32 | `arm64-osx` | 16:52 |
+| `x64-windows-release` | 36:13 | `arm64-linux` | 47:27 |
+| `x86-windows` | 50:55 | `x64-android` | 33:18 |
+| `x64-linux` | 48:27 | `arm64-android` | 34:41 |
+| | | `arm-neon-android` | 31:43 |
+
+`x64-windows` additionally configures, links and runs a CMake consumer via
+`find_package(OpenCV CONFIG REQUIRED)`, so the port is proven consumable and not merely
+installable.
+
+### How this compares to upstream CI
+
+Upstream tests opencv on **12** triplets — the 13 above minus `arm64-linux`
+(`scripts/ci.baseline.txt`). Upstream also tests with `default-features: false` and a
+feature list that omits `gtk` (`scripts/test_ports/vcpkg-ci-opencv/vcpkg.json`), which
+sidesteps the whole gtk3 dependency tree.
+
+This CI is therefore **stricter**: it uses opencv4's default features (including `gtk` on
+Linux) and covers `arm64-linux` as well. The gtk3 tree is what needs the extra system
+packages listed in the workflow.
+
+### arm64-linux cross-compilation
+
+`arm64-linux` is cross-compiled, matching upstream's own `arm64_linux` job
+(`scripts/azure-pipelines/linux-arm64/Dockerfile` uses `gcc-13-aarch64-linux-gnu`). The
+official triplets are used **unmodified**.
+
+vcpkg's X11 ports are empty packages on non-Windows
+(`ports/libxrender/portfile.cmake` sets `VCPKG_POLICY_EMPTY_PACKAGE`), so the system must
+supply `libX11`/`libXrender`/... . Under cross-compilation only the host x86_64 libraries
+exist, cairo's meson link test for `XRenderCreateConicalGradient` fails for an arm64
+target, `HAVE_XRENDERCREATECONICALGRADIENT` stays unset, and cairo re-defines
+`XLinearGradient`/`XCircle`/`XRadialGradient`/`XConicalGradient` in
+`cairo-xlib-xrender-private.h`, colliding with the system `Xrender.h`.
+
+The workflow therefore installs the **arm64 variants** of the X11 development packages and
+points `PKG_CONFIG_LIBDIR` at `/usr/lib/aarch64-linux-gnu/pkgconfig`. Note that only the
+X11 layer comes from the system: `cairo`, `pango`, `gdk-pixbuf`, `glib`, `atk`,
+`at-spi2-core` and `libepoxy` are all built by vcpkg for the target, exactly as upstream's
+Dockerfile does (it installs no gtk/cairo/pango packages either).
+
 ## Running the CI
 
 `.github/workflows/ci-opencv4.yml`
