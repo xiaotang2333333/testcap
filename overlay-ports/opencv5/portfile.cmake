@@ -21,6 +21,7 @@ vcpkg_from_github(
       0026-cuda-msvc-preprocessor.patch
       0028-ffmpeg9-support.patch
       0029-dnn-fix-caffe-pregenerated-headers.patch
+      0030-mlas-skip-unlinkable-scalar-fallback.patch
 )
 
 # Disallow accidental build of vendored copies, but keep the vendored trees that
