@@ -364,6 +364,21 @@ endif()
 
 # ^^^ downloads ^^^ | vvv after downloads vvv
 
+# OpenCV 5 ships a PRE-GENERATED misc/tflite/schema_generated.h, pinned at build
+# time with `static_assert(... FLATBUFFERS_VERSION ... "Non-compatible flatbuffers
+# version included")` against the flatbuffers it was generated with (25.9.23),
+# while vcpkg's flatbuffers is newer (25.12.19 at this baseline) -> dnn's
+# tflite_importer.cpp fails that assertion. Regenerate the header from
+# src/tflite/schema.fbs with vcpkg's flatc so it matches the installed flatbuffers.
+if("dnn" IN_LIST FEATURES)
+  set(FLATC "${CURRENT_HOST_INSTALLED_DIR}/tools/flatbuffers/flatc${VCPKG_HOST_EXECUTABLE_SUFFIX}")
+  vcpkg_execute_required_process(
+    COMMAND "${FLATC}" --cpp -o "${SOURCE_PATH}/modules/dnn/misc/tflite" "${SOURCE_PATH}/modules/dnn/src/tflite/schema.fbs"
+    WORKING_DIRECTORY "${SOURCE_PATH}/modules/dnn/misc/tflite"
+    LOGNAME flatc-${TARGET_TRIPLET}
+  )
+endif()
+
 if("ffmpeg" IN_LIST FEATURES)
   if(VCPKG_TARGET_IS_UWP)
     set(VCPKG_C_FLAGS "/sdl- ${VCPKG_C_FLAGS}")
