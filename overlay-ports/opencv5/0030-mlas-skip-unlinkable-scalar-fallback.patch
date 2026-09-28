@@ -1,8 +1,8 @@
 diff --git a/3rdparty/mlas/CMakeLists.txt b/3rdparty/mlas/CMakeLists.txt
-index c773ec0..780ed06 100644
+index c773ec0..a473585 100644
 --- a/3rdparty/mlas/CMakeLists.txt
 +++ b/3rdparty/mlas/CMakeLists.txt
-@@ -223,12 +223,27 @@ if(MLAS_RISCV64)
+@@ -223,11 +223,26 @@ if(MLAS_RISCV64)
    list(APPEND mlas_platform_srcs ${MLAS_SRC_DIR}/scalar/SgemmKernelScalar.cpp)
  endif()
  
@@ -22,14 +22,12 @@ index c773ec0..780ed06 100644
                       OR MLAS_POWER OR MLAS_LOONGARCH64 OR MLAS_S390X
                       OR MLAS_RISCV64))
 -  list(APPEND mlas_platform_srcs ${MLAS_SRC_DIR}/scalar/SgemmKernelScalar.cpp)
--endif()
 +  set(OPENCV_DNN_MLAS_SKIP_REASON
 +      "unsupported processor '${CMAKE_SYSTEM_PROCESSOR}' for the vendored MLAS"
 +      CACHE INTERNAL "" FORCE)
 +  message(WARNING "MLAS: unsupported processor '${CMAKE_SYSTEM_PROCESSOR}'; "
 +                  "MLAS disabled (DNN will use its built-in SGEMM)")
 +  return()
-+endif())
+ endif()
  
  add_library(opencv_dnn_mlas OBJECT ${mlas_common_srcs} ${mlas_platform_srcs})
- set_target_properties(opencv_dnn_mlas PROPERTIES POSITION_INDEPENDENT_CODE ON)
