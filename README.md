@@ -35,9 +35,25 @@ The port is derived from the opencv4 port and revalidated against the pristine
   `gapi` is no longer a default feature.
 * **`quirc` is gone** from the sources entirely (QR decoding is built into
   `objdetect`), so the port dropped the `quirc` feature, its dep and its patch.
-* **TFLite**: 5.0 ships a pre-generated `misc/tflite/schema_generated.h`, so the
-  port no longer runs `flatc` at build time; `0017-fix-flatbuffers.patch` still
-  redirects flatbuffers detection to the vcpkg `flatbuffers` config package.
+* **TFLite/flatbuffers**: 5.0 ships a pre-generated `misc/tflite/schema_generated.h`
+  whose `static_assert` pins the flatbuffers it was generated with (25.9), while
+  the baseline provides 25.12 → the port restored the opencv4-era `flatc` step to
+  regenerate it from `src/tflite/schema.fbs` with vcpkg's flatc;
+  `0017-fix-flatbuffers.patch` redirects flatbuffers detection to the vcpkg
+  `flatbuffers` config package.
+* **Protobuf/caffe**: 5.0 deleted `caffe.proto` but still compiles `caffe_io.cpp`
+  (used by `tf_io`), and the `PROTOBUF_UPDATE_FILES` branch never adds
+  `misc/caffe` to the include path. Patch `0029` restores `opencv-caffe.proto`
+  from 4.14 (5.0's pre-generated pb.h is byte-identical to 4.14's) and
+  regenerates it with vcpkg's protoc — the protoc-3.19-era pre-generated files
+  cannot compile against protobuf 6.33 (`PROTOBUF_VERSION` moved to
+  `runtime_version.h`, `generated_message_table_driven.h` is gone).
+* **MLAS**: the vendored subset cannot link when actually enabled
+  (`MlasHGemmSupported` is called from `compute.cpp` but defined nowhere), so
+  every green platform skips it via the ASM gate; MSVC/ARM64's `ARM64`
+  (uppercase) processor string bypassed that gate, so patch `0030` makes the
+  unknown-arch branch skip deterministically (DNN falls back to its built-in
+  SGEMM).
 * **OpenEXR**: `FindOpenEXR` now exists in-tree with a `find_package(OpenEXR 3 …)`
   call; `0012-miss-openexr.patch` became redundant (its include already happens
   under `WITH_OPENEXR`) and the REQUIRED forcing folded into
@@ -49,7 +65,7 @@ The port is derived from the opencv4 port and revalidated against the pristine
   `406d398c…`; the pre-seeds were updated (the `ipp` feature is not default, but
   the seeds are correct for `--cmake-args=-DVCPKG_OPENCV4_UPDATE=1` style refreshes).
 
-Patch disposition on 5.0.0 (13 main + 6 contrib, all verified to apply cleanly in
+Patch disposition on 5.0.0 (15 main + 6 contrib, all verified to apply cleanly in
 portfile order on pristine trees):
 
 | Status | Patches |
@@ -57,6 +73,7 @@ portfile order on pristine trees):
 | Kept byte-for-byte | `0001` `0004` `0009` `0010` `0017` `0021` `0022` `0025` `0026` `0028` + contrib `0007` `0013` `0016` `0018` `0019` |
 | Refreshed | `0002-install-options` (dropped the `data/CMakeLists.txt` hunk — the directory is gone), `0003-force-package-requirements` (rebased onto 5.0 `OpenCVFindLibsGrfmt`, JPEG/OpenEXR hunks rewritten), `0005-vulkan.diff` (dnn hunk rebased) |
 | Retargeted | `0015-fix-freetype` now patches **contrib** `modules/gapi/cmake/init.cmake` (gapi moved out of the main repo) |
+| New | `0029-dnn-fix-caffe-pregenerated-headers` (restore `caffe.proto`, regenerate with vcpkg protoc, point `fw_inc` at the binary dir), `0030-mlas-skip-unlinkable-scalar-fallback` (skip MLAS on unknown architectures) |
 | Dropped | `0008-devendor-quirc` (no quirc in 5.0), `0012-miss-openexr` (upstream now includes the find under `WITH_OPENEXR`) |
 
 ### CI
@@ -66,6 +83,12 @@ triplets, `scope=core|all`, system-package prep, arm64 cross fix, failure
 annotations) but runs `vcpkg install` from `ci/opencv5/`. The manifest pins
 `builtin-baseline` to the local vcpkg `master` commit the port was developed
 against.
+
+**Verification: 13/13 official triplets PASS** (run 36390851790, commit `08dcf61`):
+x64-windows / x64-windows-static / x64-windows-static-md / x64-windows-release /
+x86-windows / x64-linux / arm64-windows / arm64-windows-static-md / arm64-osx /
+arm64-linux / x64-android / arm64-android / arm-neon-android, including the
+x64-windows consumer link+run check.
 
 ## opencv4 4.12.0#9 → 4.14.0
 
