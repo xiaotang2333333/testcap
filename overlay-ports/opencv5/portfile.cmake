@@ -78,8 +78,9 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
  FEATURES
  "ade"        WITH_ADE
  "aravis"     WITH_ARAVIS
- # calib3d was split in OpenCV 5; geometry is NOT listed on purpose: imgproc,
- # features, photo and objdetect depend on it, so it must never be killable.
+ # OpenCV 5's module graph is mirrored as feature dependencies in vcpkg.json
+ # (imgproc/features/photo/objdetect/dnn/highgui all declare their edges), so a
+ # selection that turns geometry off can never leave a dependent module enabled.
  "calib"      BUILD_opencv_calib
  "carotene"   WITH_CAROTENE
  "contrib"    WITH_CONTRIB
@@ -98,14 +99,17 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
  "eigen"      WITH_EIGEN
  "eigen"      VCPKG_LOCK_FIND_PACKAGE_Eigen3
  "ffmpeg"     WITH_FFMPEG
+ "features"   BUILD_opencv_features
  "freetype"   WITH_FREETYPE
  "gapi"       BUILD_opencv_gapi
  "gdcm"       WITH_GDCM
+ "geometry"   BUILD_opencv_geometry
  "gstreamer"  WITH_GSTREAMER
  "gtk"        WITH_GTK
  "halide"     WITH_HALIDE
  "hdf"        BUILD_opencv_hdf
  "highgui"    BUILD_opencv_highgui
+ "imgproc"    BUILD_opencv_imgproc
  "intrinsics" CV_ENABLE_INTRINSICS
  "ipp"        WITH_IPP
  "ipp"        BUILD_IPP_IW
@@ -115,6 +119,7 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
  "jpegxl"     WITH_JPEGXL
  "msmf"       WITH_MSMF
  "nonfree"    OPENCV_ENABLE_NONFREE
+ "objdetect"  BUILD_opencv_objdetect
  "thread"     OPENCV_ENABLE_THREAD_SUPPORT
  "opencl"     WITH_OPENCL
  "openvino"   WITH_OPENVINO
@@ -122,6 +127,7 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
  "opengl"     WITH_OPENGL
  "ovis"       CMAKE_REQUIRE_FIND_PACKAGE_OGRE
  "ovis"       BUILD_opencv_ovis
+ "photo"      BUILD_opencv_photo
  "png"        WITH_PNG
  "ptcloud"    BUILD_opencv_ptcloud
  "python"     BUILD_opencv_python3

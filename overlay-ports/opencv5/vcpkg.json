@@ -27,6 +27,11 @@
   ],
   "default-features": [
     "calib",
+    "features",
+    "geometry",
+    "imgproc",
+    "objdetect",
+    "photo",
     "ptcloud",
     "stereo",
     {
@@ -93,6 +98,7 @@
           "name": "opencv5",
           "default-features": false,
           "features": [
+            "objdetect",
             "stereo"
           ]
         }
@@ -109,6 +115,7 @@
           "default-features": false,
           "features": [
             "calib",
+            "photo",
             "ptcloud",
             "stereo"
           ]
@@ -164,6 +171,14 @@
           "name": "opencv5",
           "default-features": false,
           "features": [
+            "geometry",
+            "imgproc"
+          ]
+        },
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
             "intrinsics"
           ],
           "platform": "arm64"
@@ -209,6 +224,19 @@
         }
       ]
     },
+    "features": {
+      "description": "Feature detection and description module (renamed from features2d in OpenCV 5)",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "geometry",
+            "imgproc"
+          ]
+        }
+      ]
+    },
     "freetype": {
       "description": "Freetype support for opencv",
       "dependencies": [
@@ -250,6 +278,9 @@
       "dependencies": [
         "gdcm"
       ]
+    },
+    "geometry": {
+      "description": "Computational geometry module (split from calib3d/imgproc in OpenCV 5; dependency of imgproc, features, photo and objdetect)"
     },
     "gstreamer": {
       "description": "gstreamer support for opencv",
@@ -303,7 +334,28 @@
       ]
     },
     "highgui": {
-      "description": "highgui module"
+      "description": "highgui module",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "imgproc"
+          ]
+        }
+      ]
+    },
+    "imgproc": {
+      "description": "Image processing module",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "geometry"
+          ]
+        }
+      ]
     },
     "intrinsics": {
       "description": "Enable intrinsics"
@@ -330,6 +382,20 @@
     },
     "nonfree": {
       "description": "allow nonfree and unredistributable libraries"
+    },
+    "objdetect": {
+      "description": "Object detection module (CascadeClassifier/HOG moved to contrib's xobjdetect in OpenCV 5)",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "features",
+            "geometry",
+            "imgproc"
+          ]
+        }
+      ]
     },
     "opencl": {
       "description": "Enable opencl support",
@@ -404,6 +470,19 @@
         }
       ]
     },
+    "photo": {
+      "description": "Photo module (HDR denoising etc.)",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "geometry",
+            "imgproc"
+          ]
+        }
+      ]
+    },
     "png": {
       "description": "PNG support for opencv",
       "dependencies": [
@@ -411,7 +490,17 @@
       ]
     },
     "ptcloud": {
-      "description": "Point cloud and mesh module (new in OpenCV 5)"
+      "description": "Point cloud and mesh module (new in OpenCV 5)",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "geometry",
+            "imgproc"
+          ]
+        }
+      ]
     },
     "python": {
       "description": "Python wrapper support for opencv",
@@ -489,7 +578,17 @@
       ]
     },
     "stereo": {
-      "description": "Stereo matching module (split from calib3d in OpenCV 5)"
+      "description": "Stereo matching module (split from calib3d in OpenCV 5)",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "geometry",
+            "imgproc"
+          ]
+        }
+      ]
     },
     "tbb": {
       "description": "Enable Intel Threading Building Blocks",
@@ -506,6 +605,13 @@
           "default-features": false,
           "features": [
             "contrib"
+          ]
+        },
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "dnn"
           ]
         },
         "tesseract"

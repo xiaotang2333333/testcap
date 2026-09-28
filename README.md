@@ -19,14 +19,20 @@ The port is derived from the opencv4 port and revalidated against the pristine
 ### OpenCV 5 build-system findings (why the patch set changed)
 
 * **Module restructuring**: `calib3d` was split into `geometry`/`calib`/`stereo`
-  (+ new `ptcloud`), `features2d` → `features`, and **`ml` + `gapi` moved to
-  `opencv_contrib`**. The feature list follows OpenCV 5's own structure instead of
-  staying compatible with the opencv4 port: `calib3d` is gone and replaced by
-  `calib`, `stereo` and `ptcloud` (all default features; `calib` pulls `stereo`,
-  and `contrib` pulls all three because ccalib/structured_light/rgbd need them).
-  `geometry` is deliberately **not** a feature — `imgproc`, `features`, `photo` and
-  `objdetect` depend on it, so it is always built. `gapi` (and `ade`, `freetype`)
-  depend on the `contrib` feature, and `gapi` is no longer a default feature.
+  (+ new `ptcloud`), `features2d` was renamed `features`, and **`ml` + `gapi` moved
+  to `opencv_contrib`**. The feature list follows OpenCV 5's own structure instead
+  of staying compatible with the opencv4 port: `calib3d` is gone, replaced by
+  `calib` (pulls `stereo` + `objdetect`) and `ptcloud`; the load-bearing core
+  modules `geometry`, `imgproc`, `features`, `photo` and `objdetect` are features
+  too (all default), and **every module's dependency edge from the 5.0 CMake graph
+  is mirrored as a feature dependency** — `imgproc→geometry`,
+  `features/dnn→imgproc+geometry`, `highgui→imgproc`,
+  `objdetect→features+geometry+imgproc`, etc. Selecting an upper module always
+  pulls its prerequisites, so a selection can never leave an enabled module
+  without its CMake-level dependency; `contrib` pulls
+  `calib`/`photo`/`ptcloud`/`stereo` (ccalib/structured_light/videostab/rgbd need
+  them). `gapi` (and `ade`, `freetype`) depend on the `contrib` feature, and
+  `gapi` is no longer a default feature.
 * **`quirc` is gone** from the sources entirely (QR decoding is built into
   `objdetect`), so the port dropped the `quirc` feature, its dep and its patch.
 * **TFLite**: 5.0 ships a pre-generated `misc/tflite/schema_generated.h`, so the
