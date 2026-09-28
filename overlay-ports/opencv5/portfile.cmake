@@ -38,7 +38,6 @@ list(FILTER third_party EXCLUDE REGEX "/ippicv\$")
 list(FILTER third_party EXCLUDE REGEX "/dlpack\$")
 list(FILTER third_party EXCLUDE REGEX "/mlas\$")
 file(REMOVE_RECURSE ${third_party})
-file(REMOVE "${SOURCE_PATH}/cmake/FindCUDNN.cmake")
 
 vcpkg_find_acquire_program(PKGCONFIG)
 set(ENV{PKG_CONFIG} "${PKGCONFIG}")
@@ -62,7 +61,8 @@ else()
 endif()
 
 if (USE_QT_VERSION STREQUAL "6")
-  set(QT_CORE5COMPAT "Core5Compat")
+  # OpenCV 5 no longer references Qt6 Core5Compat anywhere (checked), so only
+  # OpenGLWidgets needs declaring for consumers (OpenCVFindLibsGUI.cmake).
   set(QT_OPENGLWIDGETS "OpenGLWidgets")
 endif()
 
@@ -316,24 +316,24 @@ if("ipp" IN_LIST FEATURES)
   # cf. <SOURCE_PATH>/3rdparty/ippicv/ippicv.cmake (5.0.0 dispatch: the cache key
   # must be the OPENCV_ICV_HASH that ocv_download() verifies as the file's MD5)
 
-  # For convenient updates, use 
-  # vcpkg install opencv5[core,ipp] --cmake-args=-DVCPKG_OPENCV4_UPDATE=1
-  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" OR VCPKG_OPENCV4_UPDATE)
-    if(VCPKG_TARGET_IS_APPLE OR VCPKG_OPENCV4_UPDATE)
+  # For convenient updates, use
+  # vcpkg install opencv5[core,ipp] --cmake-args=-DVCPKG_OPENCV5_UPDATE=1
+  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" OR VCPKG_OPENCV5_UPDATE)
+    if(VCPKG_TARGET_IS_APPLE OR VCPKG_OPENCV5_UPDATE)
       vcpkg_download_distfile(OCV_DOWNLOAD
           URLS "https://raw.githubusercontent.com/opencv/opencv_3rdparty/0cc4aa06bf2bef4b05d237c69a5a96b9cd0cb85a/ippicv/ippicv_2021.9.1_mac_intel64_20230919_general.tgz"
           FILENAME "opencv-cache/ippicv/14f01c5a4780bfae9dde9b0aaf5e56fc-ippicv_2021.9.1_mac_intel64_20230919_general.tgz"
           SHA512 e53aa1bf4336a94554bf40c29a74c85f595c0aec8d9102a158db7ae075db048c1ff7f50ed81eda3ac8e07b1460862970abc820073a53c0f237e584708c5295da
       )
     endif()
-    if(VCPKG_TARGET_IS_WINDOWS OR VCPKG_OPENCV4_UPDATE)
+    if(VCPKG_TARGET_IS_WINDOWS OR VCPKG_OPENCV5_UPDATE)
       vcpkg_download_distfile(OCV_DOWNLOAD
           URLS "https://raw.githubusercontent.com/opencv/opencv_3rdparty/406d398c436d0465c8e53dd432d9ecd9301d5f4a/ippicv/ippicv_2026.0.0_win_intel64_20260327_general.zip"
           FILENAME "opencv-cache/ippicv/73bc67cd5e4c8da706fa88fe84630231-ippicv_2026.0.0_win_intel64_20260327_general.zip"
           SHA512 91df6be3e07600639798cb1ea6cda8f7c4fbb00164423ce6d63d397650657dfbe8500a5d91ee24bdaeca895d358ddfbb887bd46fc52a51496ac0f36848bbae3f
       )
     endif()
-    if(NOT (VCPKG_TARGET_IS_APPLE OR VCPKG_TARGET_IS_WINDOWS) OR VCPKG_OPENCV4_UPDATE)
+    if(NOT (VCPKG_TARGET_IS_APPLE OR VCPKG_TARGET_IS_WINDOWS) OR VCPKG_OPENCV5_UPDATE)
       vcpkg_download_distfile(OCV_DOWNLOAD
           URLS "https://raw.githubusercontent.com/opencv/opencv_3rdparty/406d398c436d0465c8e53dd432d9ecd9301d5f4a/ippicv/ippicv_2026.0.0_lnx_intel64_20260327_general.tgz"
           FILENAME "opencv-cache/ippicv/9a3ee0c5c3c02102faa422d60bfd1f4a-ippicv_2026.0.0_lnx_intel64_20260327_general.tgz"
@@ -341,22 +341,22 @@ if("ipp" IN_LIST FEATURES)
       )
     endif()
   endif()
-  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "x86" OR VCPKG_OPENCV4_UPDATE)
-    if(VCPKG_TARGET_IS_WINDOWS OR VCPKG_OPENCV4_UPDATE)
+  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "x86" OR VCPKG_OPENCV5_UPDATE)
+    if(VCPKG_TARGET_IS_WINDOWS OR VCPKG_OPENCV5_UPDATE)
       vcpkg_download_distfile(OCV_DOWNLOAD
           URLS "https://raw.githubusercontent.com/opencv/opencv_3rdparty/7f55c0c26be418d494615afca15218566775c725/ippicv/ippicv_2021.12.0_win_ia32_20240425_general.zip"
           FILENAME "opencv-cache/ippicv/8b1d2a23957d57624d0de8f2a5cae5f1-ippicv_2021.12.0_win_ia32_20240425_general.zip"
           SHA512 494f66af4eec3030fe6d2b58b89267d566fcb31f445d15cc69818d423c41fd950dc55d10694bdf91e3204ae6b13b68cc2375a2ad396b2008596c53aa0d39f4dd
       )
     endif()
-    if(VCPKG_TARGET_IS_ANDROID OR VCPKG_OPENCV4_UPDATE)
+    if(VCPKG_TARGET_IS_ANDROID OR VCPKG_OPENCV5_UPDATE)
       vcpkg_download_distfile(OCV_DOWNLOAD
           URLS "https://raw.githubusercontent.com/opencv/opencv_3rdparty/c7c6d527dde5fee7cb914ee9e4e20f7436aab3a1/ippicv/ippicv_2021.10.1_lnx_ia32_20231206_general.tgz"
           FILENAME "opencv-cache/ippicv/d9510f3ce08f6074aac472a5c19a3b53-ippicv_2021.10.1_lnx_ia32_20231206_general.tgz"
           SHA512 2e709926dfb2f31bf7759ced2db83a5f966bc44b95faedabeb05623529249ccbd689746821870c0b300de834a688cf1767d1fb653aeb06ca0973c6217d2cf94d
       )
     endif()
-    if(NOT (VCPKG_TARGET_IS_ANDROID OR VCPKG_TARGET_IS_APPLE OR VCPKG_TARGET_IS_WINDOWS) OR VCPKG_OPENCV4_UPDATE)
+    if(NOT (VCPKG_TARGET_IS_ANDROID OR VCPKG_TARGET_IS_APPLE OR VCPKG_TARGET_IS_WINDOWS) OR VCPKG_OPENCV5_UPDATE)
       vcpkg_download_distfile(OCV_DOWNLOAD
           URLS "https://raw.githubusercontent.com/opencv/opencv_3rdparty/7f55c0c26be418d494615afca15218566775c725/ippicv/ippicv_2021.12.0_lnx_ia32_20240425_general.tgz"
           FILENAME "opencv-cache/ippicv/85ffa2b9ed7802b93c23fa27b0097d36-ippicv_2021.12.0_lnx_ia32_20240425_general.tgz"
@@ -367,9 +367,9 @@ if("ipp" IN_LIST FEATURES)
 
 endif()
 
-if(VCPKG_OPENCV4_UPDATE)
+if(VCPKG_OPENCV5_UPDATE)
   message(STATUS "All downloads are up-to-date.")
-  message(FATAL_ERROR "Stopping due to VCPKG_OPENCV4_UPDATE being enabled.")
+  message(FATAL_ERROR "Stopping due to VCPKG_OPENCV5_UPDATE being enabled.")
 endif()
 
 # ^^^ downloads ^^^ | vvv after downloads vvv
@@ -481,7 +481,6 @@ vcpkg_cmake_configure(
         -DBUILD_PACKAGE=OFF
         -DBUILD_WITH_DEBUG_INFO=ON
         -DBUILD_WITH_STATIC_CRT=${BUILD_WITH_STATIC_CRT}
-        -DCURRENT_INSTALLED_DIR=${CURRENT_INSTALLED_DIR}
         ###### PYLINT/FLAKE8
         -DENABLE_PYLINT=OFF
         -DENABLE_FLAKE8=OFF
@@ -584,9 +583,6 @@ if("hdf" IN_LIST FEATURES)
 enable_language(C)
 find_dependency(HDF5)")
 endif()
-if("omp" IN_LIST FEATURES)
-  string(APPEND DEPS_STRING "\nfind_dependency(OpenMP)")
-endif()
 if("opencl" IN_LIST FEATURES)
   string(APPEND DEPS_STRING "\nfind_dependency(OpenCL CONFIG)")
 endif()
@@ -609,10 +605,10 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)")
   if("opengl" IN_LIST FEATURES)
     string(APPEND DEPS_STRING "
-find_dependency(Qt${USE_QT_VERSION} COMPONENTS Core Gui Widgets Test Concurrent ${QT_CORE5COMPAT} OpenGL ${QT_OPENGLWIDGETS})")
+find_dependency(Qt${USE_QT_VERSION} COMPONENTS Core Gui Widgets Test Concurrent OpenGL ${QT_OPENGLWIDGETS})")
   else()
     string(APPEND DEPS_STRING "
-find_dependency(Qt${USE_QT_VERSION} COMPONENTS Core Gui Widgets Test Concurrent ${QT_CORE5COMPAT})")
+find_dependency(Qt${USE_QT_VERSION} COMPONENTS Core Gui Widgets Test Concurrent)")
   endif()
 endif()
 if("sfm" IN_LIST FEATURES)
@@ -691,11 +687,6 @@ endforeach()
 
 if (EXISTS "${CURRENT_PACKAGES_DIR}/lib/pkgconfig/opencv5.pc")
   vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/lib/pkgconfig/opencv5.pc"
-    "-lQt6::Core5Compat"
-    "-lQt6Core5Compat"
-    IGNORE_UNCHANGED
-  )
-  vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/lib/pkgconfig/opencv5.pc"
     "-lhdf5::hdf5-static"
     "-lhdf5"
     IGNORE_UNCHANGED
@@ -728,11 +719,6 @@ if (EXISTS "${CURRENT_PACKAGES_DIR}/lib/pkgconfig/opencv5.pc")
 endif()
 
 if (EXISTS "${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/opencv5.pc")
-  vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/opencv5.pc"
-    "-lQt6::Core5Compat"
-    "-lQt6Core5Compat"
-    IGNORE_UNCHANGED
-  )
   vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/opencv5.pc"
     "-lhdf5::hdf5-static"
     "-lhdf5"
