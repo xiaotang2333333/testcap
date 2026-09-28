@@ -78,9 +78,9 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
  FEATURES
  "ade"        WITH_ADE
  "aravis"     WITH_ARAVIS
- "calib3d"    BUILD_opencv_calib
- "calib3d"    BUILD_opencv_geometry
- "calib3d"    BUILD_opencv_stereo
+ # calib3d was split in OpenCV 5; geometry is NOT listed on purpose: imgproc,
+ # features, photo and objdetect depend on it, so it must never be killable.
+ "calib"      BUILD_opencv_calib
  "carotene"   WITH_CAROTENE
  "contrib"    WITH_CONTRIB
  "cuda"       WITH_CUBLAS
@@ -123,11 +123,13 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
  "ovis"       CMAKE_REQUIRE_FIND_PACKAGE_OGRE
  "ovis"       BUILD_opencv_ovis
  "png"        WITH_PNG
+ "ptcloud"    BUILD_opencv_ptcloud
  "python"     BUILD_opencv_python3
  "python"     WITH_PYTHON
  "quality"    BUILD_opencv_quality
  "rgbd"       BUILD_opencv_rgbd
  "sfm"        BUILD_opencv_sfm
+ "stereo"     BUILD_opencv_stereo
  "tbb"        WITH_TBB
  "text"       BUILD_opencv_text
  "text"       WITH_TESSERACT
@@ -327,7 +329,7 @@ if("ipp" IN_LIST FEATURES)
       vcpkg_download_distfile(OCV_DOWNLOAD
           URLS "https://raw.githubusercontent.com/opencv/opencv_3rdparty/406d398c436d0465c8e53dd432d9ecd9301d5f4a/ippicv/ippicv_2026.0.0_lnx_intel64_20260327_general.tgz"
           FILENAME "opencv-cache/ippicv/9a3ee0c5c3c02102faa422d60bfd1f4a-ippicv_2026.0.0_lnx_intel64_20260327_general.tgz"
-          SHA512 2fbe529eac7aa927c71644d295db70559c975ad953393a3e680f4d745a686d4d28e49ba38f644c3748caa37436c50c47e0a7099f5d0e4b57cac6b66045bb9da
+          SHA512 2fbe529eac7aa927c71644d295db70559c975ad953393a3e680f4d745a686d4d28e49ba38f644c3748caa37436c50c47e0a7099f5d0e4b57cac6b66045bb9da4
       )
     endif()
   endif()

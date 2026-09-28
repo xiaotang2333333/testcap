@@ -26,7 +26,9 @@
     "zlib"
   ],
   "default-features": [
-    "calib3d",
+    "calib",
+    "ptcloud",
+    "stereo",
     {
       "name": "directml",
       "platform": "windows & !uwp & !mingw"
@@ -84,8 +86,17 @@
         }
       ]
     },
-    "calib3d": {
-      "description": "calib3d module (split into geometry, calib and stereo modules in OpenCV 5)"
+    "calib": {
+      "description": "Camera calibration module (split from calib3d in OpenCV 5)",
+      "dependencies": [
+        {
+          "name": "opencv5",
+          "default-features": false,
+          "features": [
+            "stereo"
+          ]
+        }
+      ]
     },
     "carotene": {
       "description": "carotene module"
@@ -97,7 +108,9 @@
           "name": "opencv5",
           "default-features": false,
           "features": [
-            "calib3d"
+            "calib",
+            "ptcloud",
+            "stereo"
           ]
         }
       ]
@@ -397,6 +410,9 @@
         "libpng"
       ]
     },
+    "ptcloud": {
+      "description": "Point cloud and mesh module (new in OpenCV 5)"
+    },
     "python": {
       "description": "Python wrapper support for opencv",
       "dependencies": [
@@ -471,6 +487,9 @@
           ]
         }
       ]
+    },
+    "stereo": {
+      "description": "Stereo matching module (split from calib3d in OpenCV 5)"
     },
     "tbb": {
       "description": "Enable Intel Threading Building Blocks",

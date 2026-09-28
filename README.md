@@ -20,8 +20,12 @@ The port is derived from the opencv4 port and revalidated against the pristine
 
 * **Module restructuring**: `calib3d` was split into `geometry`/`calib`/`stereo`
   (+ new `ptcloud`), `features2d` → `features`, and **`ml` + `gapi` moved to
-  `opencv_contrib`**. The `calib3d` feature now toggles
-  `BUILD_opencv_calib`/`geometry`/`stereo`; `gapi` (and `ade`, `freetype`) now
+  `opencv_contrib`**. The feature list follows OpenCV 5's own structure instead of
+  staying compatible with the opencv4 port: `calib3d` is gone and replaced by
+  `calib`, `stereo` and `ptcloud` (all default features; `calib` pulls `stereo`,
+  and `contrib` pulls all three because ccalib/structured_light/rgbd need them).
+  `geometry` is deliberately **not** a feature — `imgproc`, `features`, `photo` and
+  `objdetect` depend on it, so it is always built. `gapi` (and `ade`, `freetype`)
   depend on the `contrib` feature, and `gapi` is no longer a default feature.
 * **`quirc` is gone** from the sources entirely (QR decoding is built into
   `objdetect`), so the port dropped the `quirc` feature, its dep and its patch.
