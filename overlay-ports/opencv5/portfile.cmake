@@ -26,16 +26,17 @@ vcpkg_from_github(
 
 # Disallow accidental build of vendored copies, but keep the vendored trees that
 # OpenCV 5.0 adds subdirectories for unconditionally (no WITH_* gate):
-#   * mlas        -> modules/dnn/CMakeLists.txt: add_subdirectory(3rdparty/mlas)
-#                    (only skipped for Emscripten); deleting it is a configure error
-#   * cpufeatures -> root CMakeLists.txt: if(ANDROID AND WITH_CPUFEATURES)
-#   * dlpack      -> cmake/OpenCVDetectDLPack.cmake (included unconditionally)
-# None of these download anything at configure time.
+#   * mlas     -> modules/dnn/CMakeLists.txt: add_subdirectory(3rdparty/mlas)
+#                 (only skipped for Emscripten; 0030 makes the skip deterministic,
+#                 but the directory must still exist for add_subdirectory)
+#   * dlpack   -> cmake/OpenCVDetectDLPack.cmake (included unconditionally)
+# None of these download anything at configure time. (cpufeatures needs no
+# exemption: patch 0022 replaces its add_subdirectory with the vcpkg
+# CpuFeaturesNdkCompat package.)
 file(GLOB third_party "${SOURCE_PATH}/3rdparty/*")
 list(FILTER third_party EXCLUDE REGEX "/ippicv\$")
 list(FILTER third_party EXCLUDE REGEX "/dlpack\$")
 list(FILTER third_party EXCLUDE REGEX "/mlas\$")
-list(FILTER third_party EXCLUDE REGEX "/cpufeatures\$")
 file(REMOVE_RECURSE ${third_party})
 file(REMOVE "${SOURCE_PATH}/cmake/FindCUDNN.cmake")
 
