@@ -46,21 +46,21 @@ jobs:
         run: |
           set -euo pipefail
           core='[
-            {"triplet":"x64-windows",            "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-windows-static",     "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-windows-static-md",  "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-windows-release",    "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x86-windows",            "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"x64-linux",              "os":"ubuntu-latest",  "android":false, "chainload":""}
+            {"triplet":"x64-windows",            "os":"windows-latest", "android":false, "chainload":"", "features":""},
+            {"triplet":"x64-windows-static",     "os":"windows-latest", "android":false, "chainload":"", "features":""},
+            {"triplet":"x64-windows-static-md",  "os":"windows-latest", "android":false, "chainload":"", "features":""},
+            {"triplet":"x64-windows-release",    "os":"windows-latest", "android":false, "chainload":"", "features":""},
+            {"triplet":"x86-windows",            "os":"windows-latest", "android":false, "chainload":"", "features":""},
+            {"triplet":"x64-linux",              "os":"ubuntu-latest",  "android":false, "chainload":"", "features":""}
           ]'
           extra='[
-            {"triplet":"arm64-windows",           "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"arm64-windows-static-md", "os":"windows-latest", "android":false, "chainload":""},
-            {"triplet":"arm64-osx",               "os":"macos-latest",   "android":false, "chainload":""},
-            {"triplet":"arm64-linux",             "os":"ubuntu-latest",  "android":false, "chainload":"arm64-linux-toolchain.cmake"},
-            {"triplet":"x64-android",             "os":"ubuntu-latest",  "android":true,  "chainload":""},
-            {"triplet":"arm64-android",           "os":"ubuntu-latest",  "android":true,  "chainload":""},
-            {"triplet":"arm-neon-android",        "os":"ubuntu-latest",  "android":true,  "chainload":""}
+            {"triplet":"arm64-windows",           "os":"windows-latest", "android":false, "chainload":"", "features":""},
+            {"triplet":"arm64-windows-static-md", "os":"windows-latest", "android":false, "chainload":"", "features":""},
+            {"triplet":"arm64-osx",               "os":"macos-latest",   "android":false, "chainload":"", "features":""},
+            {"triplet":"arm64-linux",             "os":"ubuntu-latest",  "android":false, "chainload":"arm64-linux-toolchain.cmake", "features":"kleidicv"},
+            {"triplet":"x64-android",             "os":"ubuntu-latest",  "android":true,  "chainload":"", "features":""},
+            {"triplet":"arm64-android",           "os":"ubuntu-latest",  "android":true,  "chainload":"", "features":"kleidicv"},
+            {"triplet":"arm-neon-android",        "os":"ubuntu-latest",  "android":true,  "chainload":"", "features":""}
           ]'
 
           scope='${{ inputs.scope || 'core' }}'
@@ -87,6 +87,22 @@ jobs:
       matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+
+      # Exercise the overlay port's optional features. The manifest is rewritten
+      # so opencv4 is requested with the features this matrix entry needs; the
+      # official triplet definitions themselves stay untouched.
+      # kleidicv is only applied to the arm64 Linux/Android entries: the port
+      # declares supports "arm64 & !windows", and OpenCV itself only enables the
+      # HAL when (AARCH64 AND (ANDROID OR UNIX)).
+      - name: Enable overlay-port features for this triplet
+        if: matrix.features != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq --arg f '${{ matrix.features }}' \
+            '.dependencies = [{"name":"opencv4","features":[$f]}]' vcpkg.json > vcpkg.json.new
+          mv vcpkg.json.new vcpkg.json
+          cat vcpkg.json
 
       - name: Free disk space
         shell: bash
@@ -260,6 +276,24 @@ jobs:
                     -o -iname '*opencv_core*.dylib' \) 2>/dev/null | wc -l || true)
           echo "opencv_core artifacts: $count"
           test "$count" -gt 0 || { echo "::error::opencv_core library missing under $root"; exit 1; }
+
+      # Regression guard for the kleidicv feature. OpenCV installs the license of
+      # every other configure-time-downloaded 3rdparty component (FastCV, ippicv,
+      # opencl-headers, ...) but never did for its Arm KleidiCV HAL, whose Apache-2.0
+      # text lives at LICENSES/Apache-2.0.txt (REUSE layout, no top-level LICENSE).
+      # overlay-ports/opencv4/0030-kleidicv-install-license.patch adds it, so assert
+      # the text actually reaches the packaged copyright file.
+      - name: Verify KleidiCV license is shipped
+        if: matrix.features != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          copyright="vcpkg_installed/${{ matrix.triplet }}/share/opencv4/copyright"
+          test -f "$copyright" || { echo "::error::missing $copyright"; exit 1; }
+          grep -q "KleidiCV-Apache-2.0.txt" "$copyright" \
+            || { echo "::error::KleidiCV license missing from $copyright - 0030-kleidicv-install-license.patch regressed"; exit 1; }
+          echo "OK: KleidiCV license present"
+          grep -n -A3 "KleidiCV-Apache-2.0.txt" "$copyright" | head -8
 
       # No -G Ninja on purpose. On windows-latest the Ninja generator picks the
       # MinGW gcc that sits on PATH, while triplet x64-windows is built with MSVC.
