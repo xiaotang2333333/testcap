@@ -1,94 +1,15 @@
-# vcpkg overlay ports — opencv5 5.0.0 and opencv4 4.14.0
+# vcpkg overlay ports — opencv4 4.14.0
 
 This repository carries **overlay ports** for vcpkg plus GitHub Actions workflows that
 validate them by building and installing them for the official vcpkg triplets:
 
-* `overlay-ports/opencv5` — OpenCV **5.0.0** (new; see below)
 * `overlay-ports/opencv4` — upgrades vcpkg's `opencv4` port from `4.12.0#9` to `4.14.0`
 * `overlay-ports/opencv` — alias port forwarding to `opencv4`
 
+The OpenCV 5.0.0 overlay port lives in its own repository, `../opencv5port`
+(`overlay-ports/opencv5` + `opencv5-test` + `.github/workflows/ci-opencv5.yml`).
 No branch or commit is made inside the vcpkg checkout; everything lives here and is
 consumed through `overlay-ports`.
-
-## OpenCV 5.0.0 (`overlay-ports/opencv5`, CI: `ci-opencv5.yml`)
-
-The port is derived from the opencv4 port and revalidated against the pristine
-`5.0.0` sources (main repo + `opencv_contrib`). Its manifest is
-`ci/opencv5/vcpkg.json` so both ports can be CI'd from one repository.
-
-### OpenCV 5 build-system findings (why the patch set changed)
-
-* **Module restructuring**: `calib3d` was split into `geometry`/`calib`/`stereo`
-  (+ new `ptcloud`), `features2d` was renamed `features`, and **`ml` + `gapi` moved
-  to `opencv_contrib`**. The feature list follows OpenCV 5's own structure instead
-  of staying compatible with the opencv4 port: `calib3d` is gone, replaced by
-  `calib` (pulls `stereo` + `objdetect`) and `ptcloud`; the load-bearing core
-  modules `geometry`, `imgproc`, `features`, `photo` and `objdetect` are features
-  too (all default), and **every module's dependency edge from the 5.0 CMake graph
-  is mirrored as a feature dependency** — `imgproc→geometry`,
-  `features/dnn→imgproc+geometry`, `highgui→imgproc`,
-  `objdetect→features+geometry+imgproc`, etc. Selecting an upper module always
-  pulls its prerequisites, so a selection can never leave an enabled module
-  without its CMake-level dependency; `contrib` pulls
-  `calib`/`photo`/`ptcloud`/`stereo` (ccalib/structured_light/videostab/rgbd need
-  them). `gapi` (and `ade`, `freetype`) depend on the `contrib` feature, and
-  `gapi` is no longer a default feature.
-* **`quirc` is gone** from the sources entirely (QR decoding is built into
-  `objdetect`), so the port dropped the `quirc` feature, its dep and its patch.
-* **TFLite/flatbuffers**: 5.0 ships a pre-generated `misc/tflite/schema_generated.h`
-  whose `static_assert` pins the flatbuffers it was generated with (25.9), while
-  the baseline provides 25.12 → the port restored the opencv4-era `flatc` step to
-  regenerate it from `src/tflite/schema.fbs` with vcpkg's flatc;
-  `0017-fix-flatbuffers.patch` redirects flatbuffers detection to the vcpkg
-  `flatbuffers` config package.
-* **Protobuf/caffe**: 5.0 deleted `caffe.proto` but still compiles `caffe_io.cpp`
-  (used by `tf_io`), and the `PROTOBUF_UPDATE_FILES` branch never adds
-  `misc/caffe` to the include path. Patch `0029` restores `opencv-caffe.proto`
-  from 4.14 (5.0's pre-generated pb.h is byte-identical to 4.14's) and
-  regenerates it with vcpkg's protoc — the protoc-3.19-era pre-generated files
-  cannot compile against protobuf 6.33 (`PROTOBUF_VERSION` moved to
-  `runtime_version.h`, `generated_message_table_driven.h` is gone).
-* **MLAS**: the vendored subset cannot link when actually enabled
-  (`MlasHGemmSupported` is called from `compute.cpp` but defined nowhere), so
-  every green platform skips it via the ASM gate; MSVC/ARM64's `ARM64`
-  (uppercase) processor string bypassed that gate, so patch `0030` makes the
-  unknown-arch branch skip deterministically (DNN falls back to its built-in
-  SGEMM).
-* **OpenEXR**: `FindOpenEXR` now exists in-tree with a `find_package(OpenEXR 3 …)`
-  call; `0012-miss-openexr.patch` became redundant (its include already happens
-  under `WITH_OPENEXR`) and the REQUIRED forcing folded into
-  `0003-force-package-requirements.patch`.
-* **New configure-time download**: `imgproc` embeds the WenQuanYi Micro Hei font
-  (`WITH_UNIFONT` defaults ON), so the port pre-seeds that cache entry; the
-  tiny-dnn pre-seed was dropped (no longer referenced).
-* **ippicv 2026.0.0**: x64 Windows/Linux now fetch `ippicv_2026.0.0_*` from commit
-  `406d398c…`; the pre-seeds were updated (the `ipp` feature is not default, but
-  the seeds are correct for `--cmake-args=-DVCPKG_OPENCV4_UPDATE=1` style refreshes).
-
-Patch disposition on 5.0.0 (15 main + 6 contrib, all verified to apply cleanly in
-portfile order on pristine trees):
-
-| Status | Patches |
-| --- | --- |
-| Kept byte-for-byte | `0001` `0004` `0009` `0010` `0017` `0021` `0022` `0025` `0026` `0028` + contrib `0007` `0013` `0016` `0018` `0019` |
-| Refreshed | `0002-install-options` (dropped the `data/CMakeLists.txt` hunk — the directory is gone), `0003-force-package-requirements` (rebased onto 5.0 `OpenCVFindLibsGrfmt`, JPEG/OpenEXR hunks rewritten), `0005-vulkan.diff` (dnn hunk rebased) |
-| Retargeted | `0015-fix-freetype` now patches **contrib** `modules/gapi/cmake/init.cmake` (gapi moved out of the main repo) |
-| New | `0029-dnn-fix-caffe-pregenerated-headers` (restore `caffe.proto`, regenerate with vcpkg protoc, point `fw_inc` at the binary dir), `0030-mlas-skip-unlinkable-scalar-fallback` (skip MLAS on unknown architectures) |
-| Dropped | `0008-devendor-quirc` (no quirc in 5.0), `0012-miss-openexr` (upstream now includes the find under `WITH_OPENEXR`) |
-
-### CI
-
-`.github/workflows/ci-opencv5.yml` mirrors `ci-opencv4.yml` (same 13 official
-triplets, `scope=core|all`, system-package prep, arm64 cross fix, failure
-annotations) but runs `vcpkg install` from `ci/opencv5/`. The manifest pins
-`builtin-baseline` to the local vcpkg `master` commit the port was developed
-against.
-
-**Verification: 13/13 official triplets PASS** (run 36390851790, commit `08dcf61`):
-x64-windows / x64-windows-static / x64-windows-static-md / x64-windows-release /
-x86-windows / x64-linux / arm64-windows / arm64-windows-static-md / arm64-osx /
-arm64-linux / x64-android / arm64-android / arm-neon-android, including the
-x64-windows consumer link+run check.
 
 ## opencv4 4.12.0#9 → 4.14.0
 
@@ -96,11 +17,8 @@ x64-windows consumer link+run check.
 
 ```
 .
-├── overlay-ports/opencv5/       # OpenCV 5.0.0 port (portfile + patches + manifest)
 ├── overlay-ports/opencv4/       # the upgraded port (portfile + patches + manifest)
-├── ci/opencv5/vcpkg.json        # manifest for the opencv5 CI (depends on opencv5)
 ├── vcpkg.json                   # manifest: depends on opencv4, baseline + overlay config
-├── .github/workflows/ci-opencv5.yml
 ├── .github/workflows/ci-opencv4.yml
 ├── CMakeLists.txt / main.cpp    # tiny consumer used as a link-time sanity check
 └── CMakePresets.json
@@ -246,7 +164,7 @@ and there is no binary cache.
 The local vcpkg is `C:\msys64\home\xiaotang\vcpkg`. Nothing in it was modified.
 
 ```powershell
-cd c:\Users\65717\Desktop\testcap
+cd C:\Users\65717\Desktop\vcpkgwork\testcap
 C:\msys64\home\xiaotang\vcpkg\vcpkg.exe install --triplet x64-windows
 ```
 
